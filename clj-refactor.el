@@ -3225,7 +3225,14 @@ if REMOVE-PACKAGE_VERSION is t get rid of the (package: 20150828.1048) suffix."
       version)))
 
 (defun cljr--middleware-version ()
-  (cljr--call-middleware-sync (cljr--create-msg "version") "version"))
+  (with-current-buffer (cider-current-repl 'any 'ensure)
+    (if-let* (nrepl-versions
+              (clj-refactor (nrepl-dict-get nrepl-versions "clj-refactor")))
+        (nrepl-dict-get clj-refactor "version-string"))
+
+    ;; Fallback to clj-refactor middleware's "version" extension
+    (when (cider-nrepl-op-supported-p "version")
+      (cljr--call-middleware-sync (cljr--create-msg "version") "version"))))
 
 (defun cljr--check-middleware-version ()
   "Check whether clj-refactor and nrepl-refactor versions are the same"
@@ -3272,17 +3279,18 @@ warning by customizing `cljr-suppress-no-project-warning'.)"))))
      (format "WARNING: Can't determine Clojure version.  The refactor-nrepl middleware requires clojure %s (or newer)" cljr-minimum-clojure-version))))
 
 (defun cljr--init-middleware ()
-  (unless cljr-suppress-middleware-warnings
-    (cljr--check-clojure-version)
-    (cljr--check-middleware-version))
-  ;; Best effort; don't freak people out with errors
-  (ignore-errors
-    (when (cljr--middleware-version) ; check if middleware is running
-      (when cljr-populate-artifact-cache-on-startup
-        (cljr--init-artifact-cache))
-      (when (and (not cljr-warn-on-eval)
-                 cljr-eagerly-build-asts-on-startup)
-        (cljr--warm-ast-cache)))))
+  (when (cider--runtime-is-clojure-p)
+    (unless cljr-suppress-middleware-warnings
+      (cljr--check-clojure-version)
+      (cljr--check-middleware-version))
+    ;; Best effort; don't freak people out with errors
+    (ignore-errors
+      (when (cljr--middleware-version) ; check if middleware is running
+        (when cljr-populate-artifact-cache-on-startup
+          (cljr--init-artifact-cache))
+        (when (and (not cljr-warn-on-eval)
+                   cljr-eagerly-build-asts-on-startup)
+          (cljr--warm-ast-cache))))))
 
 (defvar cljr--list-fold-function-names
   '("map" "mapv" "pmap" "keep" "mapcat" "filter" "remove" "take-while" "drop-while"
